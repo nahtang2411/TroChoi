@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Đồng Đội Hợp Lực - Co-op Clicker Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            overflow: hidden;
+            /* Prevent pull-to-refresh on mobile */
+            overscroll-behavior-y: contain; 
+        }
+        
+        .no-select {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            /* Prevent double-tap zoom on mobile */
+            touch-action: manipulation;
+        }
+
+        .btn-bounce {
+            transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.1s ease;
+        }
+        
+        .btn-bounce:active {
+            transform: scale(0.92);
+        }
+
+        .screen {
+            display: none;
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(236, 72, 153, 0); }
+            100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); }
+        }
+
+        .click-target {
+            animation: pulse-ring 2s infinite;
+        }
+        
+        .click-target:active {
+            animation: none;
+            transform: scale(0.9);
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.8) inset;
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+
+    <!-- Lớp Loading khi đang xác thực Firebase -->
+    <div id="loading-screen" class="screen active flex-col items-center justify-center w-full h-full px-6">
+        <div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h2 class="text-xl font-bold text-purple-300">Đang tải trò chơi...</h2>
+    </div>
+
+    <!-- Màn hình Menu Chính -->
+    <div id="menu-screen" class="screen flex-col items-center justify-center w-full max-w-md px-6">
+        <h1 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-500 mb-2 text-center">ĐỒNG ĐỘI</h1>
+        <h1 class="text-4xl md:text-5xl font-black text-white mb-10 text-center tracking-wider drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">HỢP LỰC</h1>
+        
+        <button id="btn-create-room" class="btn-bounce no-select w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold py-4 px-8 rounded-2xl shadow-lg shadow-purple-900/50 mb-8 text-xl flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            Tạo Phòng Mới
+        </button>
+
+        <div class="w-full relative flex items-center py-4">
+            <div class="flex-grow border-t border-purple-800"></div>
+            <span class="flex-shrink-0 mx-4 text-purple-400 font-medium">hoặc</span>
+            <div class="flex-grow border-t border-purple-800"></div>
+        </div>
+
+        <div class="w-full mt-4 flex flex-col gap-3">
+            <input type="number" id="input-room-id" placeholder="Nhập mã phòng (4 số)" class="w-full bg-slate-800/80 border-2 border-purple-800 focus:border-pink-500 rounded-2xl py-4 px-6 text-center text-2xl font-bold text-white placeholder-purple-700 outline-none transition-colors" autocomplete="off">
+            <button id="btn-join-room" class="btn-bounce no-select w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 px-8 rounded-2xl shadow-lg text-xl flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                Vào Phòng
+            </button>
+        </div>
+    </div>
+
+    <!-- Màn hình Đợi Đồng Đội -->
+    <div id="waiting-screen" class="screen flex-col items-center justify-center w-full max-w-md px-6 text-center">
+        <h2 class="text-2xl font-bold text-purple-300 mb-2">MÃ PHÒNG CỦA BẠN</h2>
+        <div class="bg-slate-800/80 border border-purple-500/50 rounded-3xl py-6 px-12 mb-8 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+            <span id="display-room-id" class="text-6xl font-black tracking-widest text-pink-500">----</span>
+        </div>
+        <div class="flex items-center gap-3 text-lg text-slate-300">
+            <div class="w-6 h-6 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+            Đang chờ người thứ 2 tham gia...
+        </div>
+        <p class="mt-8 text-sm text-purple-400">Gửi mã này cho bạn bè để cùng chơi nhé!</p>
+    </div>
+
+    <!-- Màn hình Chơi Game -->
+    <div id="game-screen" class="screen flex-col items-center justify-between w-full h-full py-12 px-6 max-w-md mx-auto">
+        <!-- Header -->
+        <div class="w-full flex justify-between items-center bg-slate-800/50 p-4 rounded-2xl border border-purple-800/50">
+            <div class="text-sm text-purple-300 font-bold uppercase tracking-wider">Phòng: <span id="game-room-id-display" class="text-white"></span></div>
+            <div class="text-sm font-bold bg-pink-500/20 text-pink-400 px-3 py-1 rounded-full border border-pink-500/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]">MỤC TIÊU: <span id="target-display">100</span></div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="w-full flex flex-col gap-2 mt-8">
+            <div class="flex justify-between items-end">
+                <span class="text-xl font-bold text-white">Năng lượng:</span>
+                <span class="text-3xl font-black text-pink-500"><span id="score-display">0</span>%</span>
+            </div>
+            <div class="w-full h-8 bg-slate-800 rounded-full overflow-hidden border-2 border-slate-700 shadow-inner relative">
+                <!-- Sync Effect Background -->
+                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent w-full h-full -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                <!-- Actual Progress -->
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-purple-600 to-pink-500 transition-all duration-200 ease-out shadow-[0_0_15px_rgba(236,72,153,0.5)]" style="width: 0%;"></div>
+            </div>
+            <p class="text-center text-xs text-purple-400 mt-1">Cả 2 cùng bấm để nạp đầy năng lượng!</p>
+        </div>
+
+        <!-- Big Click Button -->
+        <div class="flex-grow flex items-center justify-center w-full my-8 relative">
+            <!-- Glow background -->
+            <div class="absolute w-64 h-64 bg-pink-600/30 rounded-full blur-3xl"></div>
+            
+            <button id="btn-click" class="click-target no-select relative w-56 h-56 rounded-full bg-gradient-to-br from-pink-400 via-pink-600 to-purple-700 border-4 border-pink-300 shadow-[0_10px_40px_rgba(236,72,153,0.6)] flex items-center justify-center text-white outline-none">
+                <div class="absolute inset-2 rounded-full border border-white/20"></div>
+                <span class="text-5xl font-black tracking-wider uppercase drop-shadow-md">CLICK</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Màn hình Chiến Thắng -->
+    <div id="victory-screen" class="screen flex-col items-center justify-center w-full h-full px-6 text-center z-10">
+        <!-- Background Overlay -->
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm -z-10"></div>
+        
+        <div class="bg-gradient-to-b from-slate-800 to-slate-900 p-8 rounded-3xl border border-pink-500/50 shadow-[0_0_50px_rgba(236,72,153,0.3)] w-full max-w-sm flex flex-col items-center">
+            <div class="w-24 h-24 bg-pink-500/20 rounded-full flex items-center justify-center mb-6 border-2 border-pink-400 animate-bounce">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-pink-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" /></svg>
+            </div>
+            
+            <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-yellow-400 mb-2">CHIẾN THẮNG</h1>
+            <p class="text-slate-300 mb-8 font-medium">Sức mạnh tình bạn đã nạp đầy 100% năng lượng!</p>
+            
+            <button id="btn-play-again" class="btn-bounce no-select w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-green-900/50 text-xl flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                Chơi Lại Ngay
+            </button>
+            <button id="btn-leave-room" class="mt-4 text-purple-400 hover:text-white transition-colors text-sm font-medium underline">
+                Rời phòng
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Thông Báo Lỗi (Thay thế cho alert) -->
+    <div id="error-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center px-6">
+        <div class="bg-slate-800 border-2 border-red-500 p-6 rounded-2xl max-w-sm w-full shadow-2xl flex flex-col items-center text-center transform scale-95 transition-transform duration-200" id="error-content">
+            <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Thông báo</h3>
+            <p id="error-text" class="text-slate-300 mb-6 font-medium">Đã có lỗi xảy ra.</p>
+            <button id="btn-close-error" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-6 rounded-xl transition-colors">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, getDoc, onSnapshot, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global context variables logic
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'co-op-clicker-game-default';
+        const configData = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            // Mock config for syntax fallback if needed, but the environment will provide __firebase_config
+            projectId: "mock-project"
+        };
+        
+        const app = initializeApp(configData);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // State Variables
+        let currentRoomId = null;
+        let unsubscribe = null;
+        const TARGET_SCORE = 100;
+        let localScore = 0;
+        let localStatus = 'waiting';
+
+        // UI Elements
+        const screens = {
+            loading: document.getElementById('loading-screen'),
+            menu: document.getElementById('menu-screen'),
+            waiting: document.getElementById('waiting-screen'),
+            game: document.getElementById('game-screen'),
+            victory: document.getElementById('victory-screen')
+        };
+        
+        const errorModal = document.getElementById('error-modal');
+        const errorContent = document.getElementById('error-content');
+        const errorText = document.getElementById('error-text');
+
+        // Functions
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.remove('active'));
+            if (screens[screenName]) {
+                screens[screenName].classList.add('active');
+            }
+        }
+
+        function showError(message) {
+            errorText.innerText = message;
+            errorModal.classList.remove('hidden');
+            setTimeout(() => {
+                errorContent.style.transform = 'scale(1)';
+            }, 10);
+        }
+
+        function closeError() {
+            errorContent.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                errorModal.classList.add('hidden');
+            }, 200);
+        }
+
+        function getRoomRef(roomId) {
+            // MANDATORY RULE: Use /artifacts/{appId}/public/data/{collectionName}
+            return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
+        }
+
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                showScreen('menu');
+            } catch (error) {
+                console.error("Auth error:", error);
+                showError("Không thể kết nối đến máy chủ xác thực. Vui lòng tải lại trang.");
+            }
+        }
+
+        async function createRoom() {
+            if (!auth.currentUser) return;
+            
+            try {
+                // Generate a random 4-digit ID
+                const roomId = Math.floor(1000 + Math.random() * 9000).toString();
+                const roomRef = getRoomRef(roomId);
+                
+                await setDoc(roomRef, {
+                    score: 0,
+                    status: 'waiting',
+                    target: TARGET_SCORE,
+                    createdAt: new Date().getTime()
+                });
+                
+                currentRoomId = roomId;
+                document.getElementById('display-room-id').innerText = roomId;
+                document.getElementById('game-room-id-display').innerText = roomId;
+                document.getElementById('target-display').innerText = TARGET_SCORE;
+                
+                listenToRoom(roomId);
+                showScreen('waiting');
+                
+            } catch (error) {
+                console.error("Lỗi tạo phòng:", error);
+                showError("Không thể tạo phòng lúc này.");
+            }
+        }
+
+        async function joinRoom(roomId) {
+            if (!auth.currentUser) return;
+            
+            if (!roomId || roomId.length !== 4) {
+                showError("Mã phòng phải là 4 chữ số!");
+                return;
+            }
+
+            try {
+                const roomRef = getRoomRef(roomId);
+                const docSnap = await getDoc(roomRef);
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.status === 'waiting') {
+                        // Cập nhật trạng thái thành đang chơi
+                        await updateDoc(roomRef, { status: 'playing' });
+                        currentRoomId = roomId;
+                        document.getElementById('game-room-id-display').innerText = roomId;
+                        document.getElementById('target-display').innerText = data.target || TARGET_SCORE;
+                        listenToRoom(roomId);
+                    } else if (data.status === 'playing') {
+                        showError("Phòng này đang diễn ra trận đấu rồi!");
+                    } else {
+                        showError("Trận đấu trong phòng này đã kết thúc.");
+                    }
+                } else {
+                    showError("Không tìm thấy phòng! Vui lòng kiểm tra lại mã.");
+                }
+            } catch (error) {
+                console.error("Lỗi vào phòng:", error);
+                showError("Lỗi kết nối khi vào phòng.");
+            }
+        }
+
+        function listenToRoom(roomId) {
+            if (unsubscribe) unsubscribe();
+            
+            const roomRef = getRoomRef(roomId);
+            
+            // onSnapshot requires error callback to prevent silent failures
+            unsubscribe = onSnapshot(roomRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    updateUIFromData(data);
+                } else {
+                    // Phòng bị xoá
+                    resetGame();
+                    showError("Phòng đã bị đóng.");
+                }
+            }, (error) => {
+                console.error("Lỗi đồng bộ:", error);
+                showError("Lỗi kết nối đồng bộ theo thời gian thực.");
+            });
+        }
+
+        function updateUIFromData(data) {
+            localScore = data.score;
+            localStatus = data.status;
+            const target = data.target || TARGET_SCORE;
+
+            // Cập nhật thanh tiến trình và điểm số
+            const scoreDisplay = Math.min(localScore, target);
+            const percentage = Math.min(100, Math.floor((scoreDisplay / target) * 100));
+            
+            document.getElementById('score-display').innerText = percentage;
+            document.getElementById('progress-bar').style.width = percentage + '%';
+
+            // Xử lý chuyển đổi màn hình dựa trên status
+            if (localStatus === 'playing') {
+                if (!screens.game.classList.contains('active')) {
+                    showScreen('game');
+                }
+            } else if (localStatus === 'finished') {
+                if (!screens.victory.classList.contains('active')) {
+                    showScreen('victory');
+                    fireConfetti();
+                }
+            }
+        }
+
+        async function handleGameClick() {
+            if (!auth.currentUser || !currentRoomId || localStatus !== 'playing') return;
+            
+            // Haptic feedback (nếu trình duyệt hỗ trợ trên mobile)
+            if (navigator.vibrate) {
+                navigator.vibrate(20);
+            }
+
+            const roomRef = getRoomRef(currentRoomId);
+            
+            try {
+                // Sử dụng increment để tránh xung đột dữ liệu khi cả 2 người cùng click 1 lúc
+                await updateDoc(roomRef, {
+                    score: increment(1)
+                });
+                
+                // Kiểm tra xem đã đạt mục tiêu chưa (dùng điểm local hiện tại + 1 để ước tính nhanh)
+                if (localScore + 1 >= TARGET_SCORE && localStatus !== 'finished') {
+                    // Cập nhật trạng thái chiến thắng trên database
+                    await updateDoc(roomRef, { status: 'finished' });
+                }
+            } catch (error) {
+                console.error("Lỗi khi click:", error);
+            }
+        }
+
+        async function playAgain() {
+            if (!auth.currentUser || !currentRoomId) return;
+            const roomRef = getRoomRef(currentRoomId);
+            try {
+                // Reset điểm và đổi trạng thái về chơi
+                await updateDoc(roomRef, {
+                    score: 0,
+                    status: 'playing'
+                });
+            } catch (error) {
+                console.error("Lỗi chơi lại:", error);
+                showError("Không thể bắt đầu lại trận đấu.");
+            }
+        }
+
+        function resetGame() {
+            if (unsubscribe) {
+                unsubscribe();
+                unsubscribe = null;
+            }
+            currentRoomId = null;
+            localScore = 0;
+            localStatus = 'waiting';
+            
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('score-display').innerText = '0';
+            document.getElementById('input-room-id').value = '';
+            
+            showScreen('menu');
+        }
+
+        // --- Hiệu ứng Pháo Hoa (Confetti) JS ---
+        function fireConfetti() {
+            const colors = ['#ec4899', '#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
+            for(let i = 0; i < 60; i++) {
+                let conf = document.createElement('div');
+                conf.className = 'absolute w-3 h-3 rounded-full pointer-events-none z-50';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                // Xuất phát từ giữa màn hình
+                conf.style.left = '50vw';
+                conf.style.top = '50vh';
+                conf.style.transition = 'all 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                document.body.appendChild(conf);
+                
+                // Phân tán ra các hướng
+                setTimeout(() => {
+                    const angle = Math.random() * Math.PI * 2;
+                    const velocity = 30 + Math.random() * 70;
+                    const spreadX = Math.cos(angle) * velocity;
+                    const spreadY = Math.sin(angle) * velocity + 50; // Thêm chiều rơi xuống (+50 vh)
+                    
+                    conf.style.left = `calc(50vw + ${spreadX}vw)`;
+                    conf.style.top = `calc(50vh + ${spreadY}vh)`;
+                    conf.style.transform = `rotate(${Math.random() * 720}deg) scale(${Math.random() + 0.3})`;
+                    conf.style.opacity = '0';
+                }, 50);
+                
+                // Dọn dẹp DOM
+                setTimeout(() => conf.remove(), 1600);
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('btn-create-room').addEventListener('click', createRoom);
+        
+        document.getElementById('btn-join-room').addEventListener('click', () => {
+            const input = document.getElementById('input-room-id').value;
+            joinRoom(input);
+        });
+
+        // Xử lý phím Enter cho input
+        document.getElementById('input-room-id').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinRoom(e.target.value);
+            }
+        });
+
+        // Nút Click (Hỗ trợ cả touchstart để tối ưu phản hồi trên mobile, click để tương thích chuột)
+        const btnClick = document.getElementById('btn-click');
+        // Prevent default touch behavior to stop zoom/scroll
+        btnClick.addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            handleGameClick();
+            // Thêm hiệu ứng nhấn tay
+            btnClick.style.transform = 'scale(0.9)';
+            btnClick.style.boxShadow = '0 0 15px rgba(236, 72, 153, 0.8) inset';
+        }, {passive: false});
+
+        btnClick.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            btnClick.style.transform = '';
+            btnClick.style.boxShadow = '';
+        }, {passive: false});
+
+        btnClick.addEventListener('click', (e) => {
+            // Chỉ chạy click logic nếu không phải màn hình cảm ứng (đã xử lý ở touchstart)
+            if (e.pointerType === 'mouse') {
+                handleGameClick();
+            }
+        });
+
+        document.getElementById('btn-play-again').addEventListener('click', playAgain);
+        document.getElementById('btn-leave-room').addEventListener('click', resetGame);
+        document.getElementById('btn-close-error').addEventListener('click', closeError);
+
+        // Khởi động
+        window.addEventListener('DOMContentLoaded', () => {
+            initAuth();
+        });
+
+    </script>
+</body>
+</html>
